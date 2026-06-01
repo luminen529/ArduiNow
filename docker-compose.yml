@@ -1,0 +1,25 @@
+services:
+  backend:
+    build:
+      context: ./backend
+    environment:
+      DATABASE_URL: ${DATABASE_URL:-sqlite:////data/arduinow.db}
+      SENSOR_PROVIDER: ${SENSOR_PROVIDER:-dummy}
+    ports:
+      - "${API_PORT:-8000}:8000"
+    volumes:
+      - arduinow-data:/data
+
+  frontend:
+    build:
+      context: ./frontend
+    environment:
+      VITE_API_BASE_URL: http://localhost:${API_PORT:-8000}
+      VITE_POLL_INTERVAL_MS: ${POLL_INTERVAL_MS:-4000}
+    ports:
+      - "${WEB_PORT:-5173}:5173"
+    depends_on:
+      - backend
+
+volumes:
+  arduinow-data:
