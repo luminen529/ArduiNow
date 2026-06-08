@@ -1,8 +1,25 @@
+# Environment
 .env
-*.db
-__pycache__/
-.pytest_cache/
+.env.*
+!.env.example
 
-frontend/node_modules/
-frontend/dist/
-backend/.venv/
+# Python
+**/.venv/
+**/venv/
+**/__pycache__/
+**/.pytest_cache/
+*.py[cod]
+*.db
+
+# Node / frontend
+**/node_modules/
+**/dist/
+**/.vite/
+
+# IDE / editor
+.idea/
+.vscode/
+
+# OS
+.DS_Store
+Thumbs.db

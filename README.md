@@ -30,3 +30,9 @@ docker compose up --build
 ## Hardware Integration Path
 
 `backend/app/providers.py`의 `SensorProvider` 인터페이스를 기준으로 실제 센서 구현을 추가합니다. MVP는 `DummySensorProvider`만 사용합니다. 추후 Arduino App Lab, serial, I2C/Qwiic 기반 provider를 같은 인터페이스로 연결하면 프론트엔드와 API 계약은 유지됩니다.
+
+
+## 센서 구성
+- 온도, 습도
+- 공기질
+- 
