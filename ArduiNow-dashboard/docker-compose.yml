@@ -5,6 +5,8 @@ services:
     environment:
       DATABASE_URL: ${DATABASE_URL:-sqlite:////data/arduinow.db}
       SENSOR_PROVIDER: ${SENSOR_PROVIDER:-dummy}
+      SERIAL_PORT: ${SERIAL_PORT:-COM3}
+      SERIAL_BAUDRATE: ${SERIAL_BAUDRATE:-115200}
     ports:
       - "${API_PORT:-8000}:8000"
     volumes:
