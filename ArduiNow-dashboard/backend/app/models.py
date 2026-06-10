@@ -32,3 +32,34 @@ class EventLog(BaseModel):
     title: str
     detail: str
     timestamp: datetime
+
+
+class WeatherCurrent(BaseModel):
+    timestamp: datetime
+    temperature: float
+    apparent_temperature: float
+    humidity: int = Field(ge=0, le=100)
+    precipitation: float = Field(ge=0)
+    wind_speed: float = Field(ge=0)
+    weather_code: int
+    description: str
+    latitude: float
+    longitude: float
+
+
+class StudyPresenceInput(BaseModel):
+    present: bool
+    confidence: float = Field(ge=0, le=1)
+    source: str = Field(default="browser_camera", min_length=1, max_length=40)
+    observed_at: datetime | None = None
+
+
+class StudyToday(BaseModel):
+    date: str
+    present: bool
+    active: bool
+    total_seconds: int = Field(ge=0)
+    current_session_seconds: int = Field(ge=0)
+    last_source: str | None = None
+    last_confidence: float | None = Field(default=None, ge=0, le=1)
+    last_observed_at: datetime | None = None

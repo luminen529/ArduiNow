@@ -30,6 +30,36 @@ export type EventLog = {
   timestamp: string;
 };
 
+export type WeatherCurrent = {
+  timestamp: string;
+  temperature: number;
+  apparent_temperature: number;
+  humidity: number;
+  precipitation: number;
+  wind_speed: number;
+  weather_code: number;
+  description: string;
+  latitude: number;
+  longitude: number;
+};
+
+export type StudyPresenceInput = {
+  present: boolean;
+  confidence: number;
+  source: string;
+};
+
+export type StudyToday = {
+  date: string;
+  present: boolean;
+  active: boolean;
+  total_seconds: number;
+  current_session_seconds: number;
+  last_source: string | null;
+  last_confidence: number | null;
+  last_observed_at: string | null;
+};
+
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000";
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
@@ -63,4 +93,16 @@ export const api = {
     }),
   health: () => request<DeviceHealth>("/api/device/health"),
   events: () => request<EventLog[]>("/api/events?limit=12"),
+  currentWeather: (lat: number, lon: number) =>
+    request<WeatherCurrent>(`/api/weather/current?lat=${lat}&lon=${lon}`),
+  studyToday: () => request<StudyToday>("/api/study/today"),
+  postPresence: (state: StudyPresenceInput) =>
+    request<StudyToday>("/api/study/presence", {
+      method: "POST",
+      body: JSON.stringify(state),
+    }),
+  resetStudySession: () =>
+    request<StudyToday>("/api/study/session/reset", {
+      method: "POST",
+    }),
 };

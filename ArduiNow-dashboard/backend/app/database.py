@@ -7,6 +7,10 @@ from pathlib import Path
 
 from app.config import settings
 from app.models import ControlState, EventLog, SensorReading
+from app.models import StudyPresenceInput, StudyToday
+
+PRESENT_START_SECONDS = 5
+ABSENT_STOP_SECONDS = 15
 
 
 def _database_path() -> Path:
@@ -67,6 +71,28 @@ def init_db() -> None:
                 title TEXT NOT NULL,
                 detail TEXT NOT NULL,
                 timestamp TEXT NOT NULL
+            )
+            """
+        )
+        db.execute(
+            """
+            CREATE TABLE IF NOT EXISTS study_presence_events (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                observed_at TEXT NOT NULL,
+                present INTEGER NOT NULL,
+                confidence REAL NOT NULL,
+                source TEXT NOT NULL
+            )
+            """
+        )
+        db.execute(
+            """
+            CREATE TABLE IF NOT EXISTS study_sessions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                started_at TEXT NOT NULL,
+                ended_at TEXT,
+                source TEXT NOT NULL,
+                status TEXT NOT NULL
             )
             """
         )
@@ -153,6 +179,132 @@ def events(limit: int = 20) -> list[EventLog]:
         )
         for row in rows
     ]
+
+
+def record_presence(payload: StudyPresenceInput) -> StudyToday:
+    observed_at = payload.observed_at or datetime.now()
+    with connect() as db:
+        db.execute(
+            """
+            INSERT INTO study_presence_events (observed_at, present, confidence, source)
+            VALUES (?, ?, ?, ?)
+            """,
+            (observed_at.isoformat(), int(payload.present), payload.confidence, payload.source),
+        )
+        _apply_study_session_rules(db, observed_at, payload)
+    return study_today()
+
+
+def study_today(now: datetime | None = None) -> StudyToday:
+    current_time = now or datetime.now()
+    start_of_day = current_time.replace(hour=0, minute=0, second=0, microsecond=0)
+    with connect() as db:
+        active = _active_session(db)
+        sessions = db.execute(
+            """
+            SELECT * FROM study_sessions
+            WHERE started_at >= ?
+            ORDER BY started_at ASC
+            """,
+            (start_of_day.isoformat(),),
+        ).fetchall()
+        last_event = db.execute(
+            """
+            SELECT * FROM study_presence_events
+            WHERE observed_at >= ?
+            ORDER BY observed_at DESC
+            LIMIT 1
+            """,
+            (start_of_day.isoformat(),),
+        ).fetchone()
+
+    total_seconds = 0
+    current_session_seconds = 0
+    for row in sessions:
+        started_at = datetime.fromisoformat(row["started_at"])
+        ended_at = datetime.fromisoformat(row["ended_at"]) if row["ended_at"] else current_time
+        duration = max(0, int((ended_at - started_at).total_seconds()))
+        total_seconds += duration
+        if active and row["id"] == active["id"]:
+            current_session_seconds = duration
+
+    return StudyToday(
+        date=current_time.date().isoformat(),
+        present=bool(last_event["present"]) if last_event else False,
+        active=active is not None,
+        total_seconds=total_seconds,
+        current_session_seconds=current_session_seconds,
+        last_source=last_event["source"] if last_event else None,
+        last_confidence=last_event["confidence"] if last_event else None,
+        last_observed_at=datetime.fromisoformat(last_event["observed_at"]) if last_event else None,
+    )
+
+
+def reset_study_today() -> StudyToday:
+    now = datetime.now()
+    start_of_day = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    with connect() as db:
+        db.execute("DELETE FROM study_presence_events WHERE observed_at >= ?", (start_of_day.isoformat(),))
+        db.execute("DELETE FROM study_sessions WHERE started_at >= ?", (start_of_day.isoformat(),))
+    return study_today(now)
+
+
+def _apply_study_session_rules(db: sqlite3.Connection, observed_at: datetime, payload: StudyPresenceInput) -> None:
+    active = _active_session(db)
+    if payload.present:
+        if active is None and _current_streak_seconds(db, observed_at, present=True) >= PRESENT_START_SECONDS:
+            streak_start = _current_streak_start(db, present=True) or observed_at
+            db.execute(
+                """
+                INSERT INTO study_sessions (started_at, ended_at, source, status)
+                VALUES (?, NULL, ?, 'active')
+                """,
+                (streak_start.isoformat(), payload.source),
+            )
+        return
+
+    if active and _current_streak_seconds(db, observed_at, present=False) >= ABSENT_STOP_SECONDS:
+        absent_start = _current_streak_start(db, present=False) or observed_at
+        db.execute(
+            """
+            UPDATE study_sessions
+            SET ended_at = ?, status = 'paused'
+            WHERE id = ?
+            """,
+            (absent_start.isoformat(), active["id"]),
+        )
+
+
+def _active_session(db: sqlite3.Connection) -> sqlite3.Row | None:
+    return db.execute(
+        "SELECT * FROM study_sessions WHERE status = 'active' ORDER BY started_at DESC LIMIT 1"
+    ).fetchone()
+
+
+def _current_streak_seconds(db: sqlite3.Connection, observed_at: datetime, present: bool) -> int:
+    streak_start = _current_streak_start(db, present)
+    if streak_start is None:
+        return 0
+    return max(0, int((observed_at - streak_start).total_seconds()))
+
+
+def _current_streak_start(db: sqlite3.Connection, present: bool) -> datetime | None:
+    rows = db.execute(
+        """
+        SELECT observed_at, present FROM study_presence_events
+        ORDER BY observed_at DESC
+        LIMIT 120
+        """
+    ).fetchall()
+    if not rows or bool(rows[0]["present"]) != present:
+        return None
+
+    start = datetime.fromisoformat(rows[0]["observed_at"])
+    for row in rows[1:]:
+        if bool(row["present"]) != present:
+            break
+        start = datetime.fromisoformat(row["observed_at"])
+    return start
 
 
 def _reading_from_row(row: sqlite3.Row) -> SensorReading:
