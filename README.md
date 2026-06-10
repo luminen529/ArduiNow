@@ -21,17 +21,15 @@ docker compose up --build
 
 ## 온도 센서 연결
 
-`ArduiNow-board/mcu/sensors/sensors.ino`는 DHT 센서 값을 시리얼로 출력합니다. 백엔드에서 이 값을 읽으려면 `.env`를 아래처럼 바꿉니다.
+`ArduiNow-board/mcu/sensors/sensors.ino`는 DHT 센서와 A0 공기질 센서 값을 시리얼로 출력합니다. 백엔드에서 이 값을 읽으려면 `.env`를 아래처럼 둡니다.
 
 ```env
-SENSOR_PROVIDER=serial_dht
-SERIAL_PORT=COM3
+SENSOR_PROVIDER=serial_arduino
+SERIAL_PORT=COM7
 SERIAL_BAUDRATE=115200
 ```
 
-`SERIAL_PORT`는 Windows 장치 관리자 또는 Arduino IDE에서 보이는 포트로 바꿔야 합니다. 예: `COM4`.
-
-데모 데이터로 실행하려면 `SENSOR_PROVIDER=dummy`를 유지하면 됩니다.
+`SERIAL_PORT`는 Windows 장치 관리자 또는 Arduino IDE에서 보이는 포트와 일치해야 합니다.
 
 ## 웹 페이지 수정 방법
 
@@ -63,3 +61,7 @@ Set-Location ArduiNow-dashboard\backend
 - `GET /api/sensors/history`
 - `GET /api/device/health`
 - `GET /api/ping`
+
+## 센서 포트 번호
+- DHT 센서: 3
+- 공기질: A0

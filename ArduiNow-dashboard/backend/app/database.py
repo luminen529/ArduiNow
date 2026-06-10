@@ -40,10 +40,14 @@ def init_db() -> None:
                 temperature REAL NOT NULL,
                 humidity INTEGER NOT NULL,
                 light INTEGER NOT NULL,
-                air_quality INTEGER NOT NULL
+                air_quality INTEGER NOT NULL,
+                air_quality_raw INTEGER NOT NULL DEFAULT 0
             )
             """
         )
+        columns = {row["name"] for row in db.execute("PRAGMA table_info(sensor_readings)").fetchall()}
+        if "air_quality_raw" not in columns:
+            db.execute("ALTER TABLE sensor_readings ADD COLUMN air_quality_raw INTEGER NOT NULL DEFAULT 0")
         db.execute(
             """
             CREATE TABLE IF NOT EXISTS controls (
@@ -75,8 +79,8 @@ def save_reading(reading: SensorReading) -> None:
     with connect() as db:
         db.execute(
             """
-            INSERT INTO sensor_readings (timestamp, temperature, humidity, light, air_quality)
-            VALUES (?, ?, ?, ?, ?)
+            INSERT INTO sensor_readings (timestamp, temperature, humidity, light, air_quality, air_quality_raw)
+            VALUES (?, ?, ?, ?, ?, ?)
             """,
             (
                 reading.timestamp.isoformat(),
@@ -84,6 +88,7 @@ def save_reading(reading: SensorReading) -> None:
                 reading.humidity,
                 reading.light,
                 reading.air_quality,
+                reading.air_quality_raw,
             ),
         )
 
@@ -157,4 +162,5 @@ def _reading_from_row(row: sqlite3.Row) -> SensorReading:
         humidity=row["humidity"],
         light=row["light"],
         air_quality=row["air_quality"],
+        air_quality_raw=row["air_quality_raw"] if "air_quality_raw" in row.keys() else 0,
     )

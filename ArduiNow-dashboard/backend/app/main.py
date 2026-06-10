@@ -4,7 +4,7 @@ from contextlib import asynccontextmanager
 from datetime import datetime
 
 import psutil
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
 from app import database
@@ -12,17 +12,21 @@ from app.config import settings
 from app.models import ControlState, DeviceHealth, EventLog, SensorReading
 from app.providers import create_provider
 
-provider = create_provider(settings.sensor_provider)
+provider = None
+
+
+def get_provider():
+    global provider
+    if provider is None:
+        provider = create_provider(settings.sensor_provider)
+    return provider
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     database.init_db()
-    if not database.latest_reading():
-        for _ in range(12):
-            database.save_reading(provider.read())
     if not database.events():
-        database.add_event("info", "시스템 시작", "더미 센서 공급자가 활성화되었습니다.")
+        database.add_event("info", "System started", "Serial sensor provider is active.")
     yield
 
 
@@ -38,7 +42,10 @@ app.add_middleware(
 
 @app.get("/api/sensors/latest", response_model=SensorReading)
 def get_latest_sensor() -> SensorReading:
-    reading = provider.read()
+    try:
+        reading = get_provider().read()
+    except (RuntimeError, OSError) as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
     database.save_reading(reading)
     return reading
 
@@ -46,7 +53,14 @@ def get_latest_sensor() -> SensorReading:
 @app.get("/api/sensors/history", response_model=list[SensorReading])
 def get_sensor_history(limit: int = 60) -> list[SensorReading]:
     stored = database.history(limit)
-    return stored if stored else [provider.read()]
+    if stored:
+        return stored
+    try:
+        reading = get_provider().read()
+    except (RuntimeError, OSError) as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    database.save_reading(reading)
+    return [reading]
 
 
 @app.get("/api/controls", response_model=ControlState)
@@ -64,7 +78,7 @@ def update_controls(state: ControlState) -> ControlState:
         if getattr(current, name) != getattr(updated, name)
     ]
     if changes:
-        database.add_event("info", "제어 상태 변경", ", ".join(changes) + " 값이 변경되었습니다.")
+        database.add_event("info", "Control state changed", ", ".join(changes) + " changed.")
     return updated
 
 

@@ -8,6 +8,7 @@ class SensorReading(BaseModel):
     humidity: int = Field(ge=0, le=100)
     light: int = Field(ge=0, le=100)
     air_quality: int = Field(ge=0, le=100)
+    air_quality_raw: int = Field(default=0, ge=0, le=1023)
 
 
 class ControlState(BaseModel):
